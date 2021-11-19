@@ -6,7 +6,7 @@ import { blue } from '@material-ui/core/colors'
 import Typography from '@material-ui/core/Typography'
 import Container from '@material-ui/core/Container'
 import Grid from '@material-ui/core/Grid'
-import { message } from 'antd'
+import { message, Checkbox } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
 import Dragger from 'antd/lib/upload/Dragger'
 import { CloudUploadOutlined } from '@ant-design/icons'
@@ -18,18 +18,26 @@ import axios from 'axios'
 import contract from '../utils/contract'
 import web3 from '../utils/web3'
 import Paper from '@material-ui/core/Paper'
-import * as tokens from '../global/tokens_list.json'
+import * as tokens_matic from '../global/tokens_list_matic.json'
+import * as tokens_bsc from '../global/tokens_list_bsc.json'
+import * as tokens_eth from '../global/tokens_list_eth.json'
 import { withTranslation } from 'react-i18next'
 //import { TOKENPOCKET, METAMASK, LASTCONNECT, MATHWALLET } from '../global/globalsString'
 import withCommon from '../styles/common'
 import Footer from '../components/Footer'
 import { generateZipFile } from '../utils/zipFile.js'
-import getWalletAccount from '../utils/getWalletAccount'
+import { getWalletAccount } from '../utils/getWalletAccountandChainID'
+
+// const receiptDataTypes = [
+// 	{ type: 'address', name: 'publisher', indexed: true },
+// 	{ type: 'uint64', name: 'rootNFTId', indexed: true },
+// 	{ type: 'address', name: 'token_addr' },
+// ]
 
 // const mathwallet = require('math-js-sdk');
 // const tp = require('tp-js-sdk');
 const { pinata_api_key, pinata_secret_api_key } = require('../project.secret.js')
-
+const BigNumber = require('bignumber.js');
 const FormData = require('form-data')
 const bs58 = require('bs58')
 const { Option } = Select
@@ -68,23 +76,28 @@ const styles = (theme) => ({
 	},
 	paperImg: {
 		backgroundColor: '#EFEBE9',
-		inherit:'PaddingL5,PaddingR5,PaddingT5,PaddingB5'
+		inherit: 'PaddingL5,PaddingR5,PaddingT5,PaddingB5'
 	},
-	coverImg:{
+	coverImg: {
 		[theme.breakpoints.between('xs', 'sm')]: {
-			width:'80vw'
+			width: '80vw'
 		},
 		[theme.breakpoints.between('sm', 'md')]: {
-			width:'30vw'
+			width: '30vw'
 		},
 		[theme.breakpoints.between('md', 'lg')]: {
-			width:'30vw'
+			width: '30vw'
 		},
 		[theme.breakpoints.between('lg', 'xl')]: {
-			width:'30vw'
+			width: '30vw'
 		},
 		[theme.breakpoints.up('xl')]: {
-			width:'30vw'
+			width: '30vw'
+		},
+	},
+	checkBox: {
+		[theme.breakpoints.between('xs', 'sm')]: {
+			marginLeft: '0px !important'
 		},
 	},
 	titlePub: {
@@ -151,9 +164,21 @@ const styles = (theme) => ({
 			height: 100
 		}
 	},
+	btnMini: {
+		inherit: 'MarginT10'
+	},
+	Display9: {
+		inherit: 'MarginT9,DisplaySeBold9'
+
+	}
 })
 
 class Publish extends Component {
+	constructor(props) {
+		super(props);
+		//this.onCheckBoxChange = this.
+	}
+
 	state = {
 		name: '',
 		bonusFee: 0,
@@ -161,45 +186,73 @@ class Publish extends Component {
 		buffer: null,
 		ipfsHashCover: '',
 		ipfsMeta: '',
-		fileIpfs: '',
 		description: '',
 		shareTimes: 0,
 		onLoading: false,
 		rootNFTId: '',
 		userAccount: '',
 		sig: '',
-		fileType: '',
 		finished: false,
 		coverURL: '',
 		data: [],
 		token_addr: null,
-		token_symbol: 'MATIC',
+		token_symbol: '',
 		decimal: 0,
 		fileList: [],
+		isNC: true,
+		isND: false,
+		isFree: false,
 		uploadBtnDisable: false,
-		submitBtnDisable: true,
+	}
+	UNSAFE_componentWillMount() {
+		switch (localStorage.getItem('chainId')) {
+		case '0x89':
+			this.tokens = tokens_matic;
+			this.setState({
+				token_symbol: 'MATIC',
+			})
+			break;
+		case '0x38':
+			this.tokens = tokens_bsc;
+			this.setState({
+				token_symbol: 'BNB',
+			})
+			break;
+		default:
+			this.tokens = tokens_eth;
+			this.setState({
+				token_symbol: 'ETH',
+			})
+			break;
+		}
 	}
 
 	async componentDidMount() {
+		// const params = web3.eth.abi.decodeParameters(receiptDataTypes, '0x000000000000000000000000843d4a358471547f51534e3e51fae91cb4dc3f28');
+		// console.log(params.toString())
+
 		const { t } = this.props
 		if (!window.ethereum) {
 			alert(t('please_install_metamask'))
 			window.location.href = '/#/introPublish'
 			return
 		}
+
+
+
 		// const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-		const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-		if (chainId !== '0x89') {
-			alert(t('please_set_polygon'))
-			await window.ethereum.request({
-				method: 'wallet_switchEthereumChain',
-				params: [
-					{
-						chainId: '0x89',
-					},
-				],
-			})
-		}
+		// const chainId = await window.ethereum.request({ method: 'eth_chainId' })
+		// if (chainId !== '0x89') {
+		// 	alert(t('please_set_polygon'))
+		// 	await window.ethereum.request({
+		// 		method: 'wallet_switchEthereumChain',
+		// 		params: [
+		// 			{
+		// 				chainId: '0x89',
+		// 			},
+		// 		],
+		// 	})
+		// }
 	}
 
 	handleGetPubName = (event) => {
@@ -209,6 +262,7 @@ class Publish extends Component {
 	}
 
 	handleGetBonusFee = (value) => {
+		if (value >= 100) value = 100;
 		this.setState({
 			bonusFee: value,
 		})
@@ -235,7 +289,9 @@ class Publish extends Component {
 	handleSearch = async (value) => {
 		if (value) {
 			let values = value.toLowerCase()
-			let tokens_list = tokens.tokens
+			let tokens_list = this.tokens.default.tokens
+			//console.log(this.tokens)
+			//console.log(tokens_list)
 			let matched_data = []
 			let reg = new RegExp(values)
 			for (let token of tokens_list) {
@@ -267,7 +323,7 @@ class Publish extends Component {
 
 	handleSelectChange = async (value) => {
 		const { t } = this.props
-		let tokens_list = tokens.tokens
+		let tokens_list = this.tokens.default.tokens
 		let address
 		let token_symbol
 		let token_decimal
@@ -310,7 +366,7 @@ class Publish extends Component {
 				this.state.bonusFee === 0 ||
 				this.state.shareTimes === 0 ||
 				this.state.ipfsHashCover === '' ||
-				this.state.fileIpfs === '' ||
+				this.state.fileList.length === 0 ||
 				this.state.token_addr === null
 			) {
 				message.error({
@@ -324,16 +380,21 @@ class Publish extends Component {
 				this.setState({
 					onLoading: true,
 				})
+				const zipedFileObj = await this.uploadFiles()
 				let img_url = 'https://coldcdn.com/api/cdn/v5ynur/ipfs/' + this.state.ipfsHashCover
 				this.setState({
 					coverURL: img_url,
 				})
-				//console.debug('coverURL: ', this.state.coverURL)
 				let trimmed_des = this.state.description.replace(/(\r\n\t|\n|\r\t)/gm, ' ')
 				this.setState({
 					userAccount: account,
 				})
-				let file_url = 'https://coldcdn.com/api/cdn/v5ynur/ipfs/' + this.state.fileIpfs
+				if (zipedFileObj === null) {
+					message.error('文件上传失败，请重试');
+					this.setState({ onLoading: false });
+					return;
+				}
+				let file_url = 'https://coldcdn.com/api/cdn/v5ynur/ipfs/' + zipedFileObj.ipfsHash
 				let JSONBody = {
 					name: this.state.name,
 					description: trimmed_des,
@@ -349,7 +410,7 @@ class Publish extends Component {
 							value: file_url,
 						},
 						{
-							value: this.state.fileType,
+							value: zipedFileObj.fileType,
 						},
 						{
 							trait_type: 'Encrypted',
@@ -372,35 +433,40 @@ class Publish extends Component {
 						ipfsMeta: bytesToContract,
 					})
 
-					let price_with_decimal = this.state.price * 10 ** this.state.decimal
+					const priceBN = BigNumber(this.state.price * 10 ** this.state.decimal);
+					let price_with_decimal = web3.utils.toBN(priceBN)
 					price_with_decimal = price_with_decimal.toString()
 					console.debug('price_with_decimal: ', price_with_decimal)
 					let ipfsToContract = '0x' + bytesToContract
 
 					let gasPrice = await web3.eth.getGasPrice()
 					let new_gas_price = Math.floor(parseInt(gasPrice) * 1.5).toString()
-					contract.methods
+					contract().methods
 						.publish(
 							price_with_decimal,
 							this.state.bonusFee,
 							this.state.shareTimes,
 							ipfsToContract,
-							this.state.token_addr
+							this.state.token_addr,
+							this.state.isFree,
+							this.state.isNC,
+							this.state.isND
 						)
 						.send({
 							from: this.state.userAccount,
 							gasPrice: new_gas_price,
 						})
 						.on('receipt', function (receipt) {
-							//console.log(receipt)
-							let publish_event = receipt.events.Publish
-							let returned_values = publish_event.returnValues
-							let root_nft_id = returned_values.rootNFTId
-							let issue_id = returned_values.issue_id
+
+							console.log(receipt)
+							const data = receipt.events.Publish.raw.topics;
+							console.log(data)
+
+							let root_nft_id = parseInt(data[2], 16);
 							obj.setState({
 								onLoading: false,
 								rootNFTId: root_nft_id,
-								issueId: issue_id,
+								//issueId: issue_id,
 								finished: true,
 							})
 							message.success({
@@ -436,6 +502,9 @@ class Publish extends Component {
 						})
 				} catch (error) {
 					console.debug(error)
+					this.setState({
+						onLoading: false,
+					})
 					message.error({
 						content: t('似乎遇到了些小问题：') + ` ${error}`,
 						className: 'custom-class',
@@ -459,19 +528,15 @@ class Publish extends Component {
 	}
 
 	/* Get ziped files and upload ziped files to IPFS
+	 * @return: an Object contains {fileIpfsHash, fileType}  or  null (if errro)
 	 */
 	uploadFiles = async () => {
 		if (this.state.fileList.length !== 0) {
-			this.setState({
-				uploadBtnDisable: true,
-				onLoading: true,
-			})
 			const zipedFiles = await generateZipFile(this.state.name, this.state.fileList);
 			const params = new FormData()
 			params.append('file', zipedFiles)
 			//console.log('binary: ')
 			const pinFileUrl = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
-
 			try {
 				const response = await axios.post(
 					pinFileUrl,
@@ -484,19 +549,12 @@ class Publish extends Component {
 							pinata_secret_api_key: pinata_secret_api_key,
 						}
 					})
-
-				//console.log(response)
 				if (response.statusText === 'OK') {
 					message.success('文件打包上传成功!');
-					this.setState({
-						onLoading: false,
-					})
 					//TODO: 默认所有文件都为zip类型（单文件同样打包）
-					this.setState({
-						submitBtnDisable: false,
-						fileIpfs: response.data.IpfsHash,
-						fileType: 'zip',
-					})
+					const fileIpfsHash = response.data.IpfsHash;
+					const fileType = 'zip'
+					return { ipfsHash: fileIpfsHash, fileType: fileType };
 				}
 				else {
 					message.error({
@@ -506,14 +564,7 @@ class Publish extends Component {
 							marginTop: '10vh',
 						},
 					})
-					this.setState({
-						onLoading: false,
-					})
-				}
-				if (this.state.fileIpfs === '') {
-					this.setState({
-						uploadBtnDisable: false,
-					})
+					return null;
 				}
 			} catch (e) {
 				console.log(e.response);
@@ -522,8 +573,34 @@ class Publish extends Component {
 		else {
 			message.error('上传文件不能为空！')
 		}
-
 	}
+
+	onCheckBoxChange(e) {
+		console.log(`checked = ${e.target.checked}`);
+		console.log(e.target.id)
+		switch (e.target.id) {
+		case 'isNC':
+			this.setState({
+				isNC: e.target.checked,
+			});
+			break;
+		case 'isND':
+			this.setState({
+				isND: e.target.checked,
+			})
+			break;
+		case 'isFree':
+			this.setState({
+				isFree: e.target.checked,
+			})
+			break;
+		}
+	}
+
+	onUpdateChain() {
+		this.UNSAFE_componentWillMount();
+	}
+
 
 	render() {
 		const { t } = this.props
@@ -578,56 +655,7 @@ class Publish extends Component {
 			},
 		}
 
-		const propFile = {
-			// name: 'file',
-			// action: 'https://api.pinata.cloud/pinning/pinFileToIPFS',
-			// headers: {
-			// 	pinata_api_key: pinata_api_key,
-			// 	pinata_secret_api_key: pinata_secret_api_key,
-			// },
-			// data: this.state.buffer,
-			// beforeUpload: (file) => {
-			// 	return new Promise((resolve, reject) => {
-			// 		try {
-			// 			const reader = new FileReader()
-			// 			reader.readAsArrayBuffer(file)
-			// 			reader.onload = (e) => {
-			// 				let b = e.target.result
-			// 				let params = new FormData()
-			// 				params.append('file', b)
-			// 				this.setState({
-			// 					buffer: params,
-			// 				})
-			// 			}
-			// 			resolve()
-			// 		} catch (e) {
-			// 			message.error('Read file error')
-			// 			reject()
-			// 		}
-			// 	})
-			// },
-			// async onChange(info) {
-			// 	const { status } = info.file
-			// 	// console.debug(typeof info.file.type)
-			// 	// text/plain image/jpeg application/pdf
-			// 	if (status === 'done') {
-			// 		message.success(`${info.file.name} file uploaded successfully.`)
-			// 		let file_type = info.file.name.split('.')
-			// 		let file_suffix = file_type[file_type.length - 1]
-			// 		console.debug(file_suffix)
-			// 		console.debug('file ipfs hash: ', info.file.response.IpfsHash)
-			// 		obj.setState({
-			// 			fileIpfs: info.file.response.IpfsHash,
-			// 			fileType: file_suffix,
-			// 		})
-			// 	} else if (status === 'error') {
-			// 		message.error(`${info.file.name} file upload failed.`)
-			// 	}
-			// },
-			// onDrop(e) {
-			// 	message.error('Only image file supported')
-			// 	console.log('Dropped files', e.dataTransfer.files)
-			// },
+		const propFile = {			
 			onRemove: file => {
 				this.setState(state => {
 					const index = state.fileList.indexOf(file);
@@ -648,38 +676,26 @@ class Publish extends Component {
 			fileList,
 		}
 
-		// if (this.state.onLoading) {
-		//   return (
-		//     <div>
-		//       <ThemeProvider theme={theme}>
-		//         <TopBar />
-		//         <div style={{ marginLeft: '35%', marginTop: '10%' }}>
-		//           <ReactLoading type={'bars'} color={'#2196f3'} width={'40%'} />
-		//         </div>
-		//       </ThemeProvider>
-		//     </div>
-		//   )
-		// } else
 		if (this.state.finished) {
 			return (
 				<Spin spinning={this.state.onLoading} size="large">
 					<ThemeProvider theme={theme}>
 						<TopBar />
 						<div style={{ textAlign: 'center' }}>
-							<Typography className={classes.titleCon+' '+classes.MarginB5}>
+							<Typography className={classes.titleCon + ' ' + classes.MarginB5}>
 								<b>{t('pulish_success')}</b>
 							</Typography>
-							<div style={{display:'flex',justifyContent:'center'}}>
+							<div style={{ display: 'flex', justifyContent: 'center' }}>
 								<Paper className={classes.paperImg}>
 									<img className={classes.coverImg} src={this.state.coverURL}></img>
 								</Paper>
 							</div>
-							<Typography className={classes.Display9+' '+classes.MarginT10}>
+							<Typography className={classes.Display9 + ' ' + classes.MarginT10}>
 								{t('you_gain_nft')} #{this.state.rootNFTId}
 							</Typography>
 
 							<Button
-								className={classes.btn + ' ' +classes.MarginB5}
+								className={classes.btn + ' ' + classes.MarginB5}
 								onClick={this.checkDetail}
 							>
 								{t('show_detail')}
@@ -693,7 +709,7 @@ class Publish extends Component {
 			return (
 				<Spin spinning={this.state.onLoading} size="large" style={{ marginTop: 1000 }}>
 					<ThemeProvider theme={theme}>
-						<TopBar />
+						<TopBar parent={this} />
 						<Container component="main" maxWidth="xs" className={classes.main}>
 							<div className={classes.paper}>
 								{/* {showLoading()} */}
@@ -724,8 +740,7 @@ class Publish extends Component {
 												id="bonusFee"
 												defaultValue={0}
 												min={0}
-												max={100}
-												formatter={(value) => `${value}%`}
+												formatter={(value) => { return (value <= 100) ? (`${value}%`) : ('100%') }}
 												parser={(value) => value.replace('%', '')}
 												onChange={this.handleGetBonusFee}
 												className={classes.inputNum}
@@ -782,13 +797,24 @@ class Publish extends Component {
 										</Grid>
 										<Grid item style={{ width: '100%' }}>
 											<label className={classes.Display9}>
+												{t('作品权限')} <span style={{ color: 'red' }}>*</span>
+											</label>
+											<br />
+											{/* <p className={classes.Display11}>{'is_NC & is_ND'}</p> */}
+											<Checkbox id='isND' className={classes.Display11 + ' ' + classes.checkBox} defaultChecked onChange={this.onCheckBoxChange.bind(this)}>{t('是否允许二次创作')}</Checkbox>
+											<Checkbox id='isNC' className={classes.Display11 + ' ' + classes.checkBox} onChange={this.onCheckBoxChange.bind(this)}>{t('是否允许商用')}</Checkbox>
+											<Checkbox id='isFreeFirst' className={classes.Display11 + ' ' + classes.checkBox} onChange={this.onCheckBoxChange.bind(this)}>{t('允许一级节点免费铸造')}</Checkbox>
+										</Grid>
+
+										<Grid item style={{ width: '100%' }}>
+											<label className={classes.Display9}>
 												{t('art_desc')} <span style={{ color: 'red' }}>*</span>
 											</label>
 											<p className={classes.Display11}>{t('art_desc_tip')}</p>
 											<TextArea rows={6} id="Description" onChange={this.handleGetDescription} />
 										</Grid>
 									</Grid>
-									<label className={classes.Display9}>
+									<label className={classes.Display9 + ' ' + classes.MarginT10}>
 										{t('pic_cover')} <span style={{ color: 'red' }}>*</span>
 									</label>
 									<p className={classes.Display11}>{t('pic_cover_tip')}</p>
@@ -800,7 +826,7 @@ class Publish extends Component {
 										<p className={classes.Display11}>{t('upload_file_tip2')}</p>
 									</Dragger>
 
-									<label className={classes.Display9}>
+									<label className={classes.Display9 + ' ' + classes.MarginT10}>
 										{t('art_file')} <span style={{ color: 'red' }}>*</span>
 									</label>
 									<p className={classes.Display11}> {t('art_file_tip')}</p>
@@ -811,24 +837,10 @@ class Publish extends Component {
 										<p className={classes.Display11}>{t('upload_file_tip1')}</p>
 										<p className={classes.Display11}>{t('upload_file_tip2')}</p>
 									</Dragger>
-									<Button
-										variant="contained"
-										className={classes.btn}
-										disabled={this.state.uploadBtnDisable}
-
-										style={{
-											float: 'right',
-											//fontSize: '14px',
-										}}
-										onClick={this.uploadFiles}
-									>
-										{t('打包并上传')}
-									</Button>
 								</form>
 								<Button
-									disabled ={this.state.submitBtnDisable}
 									className={classes.btn}
-									startIcon={<CloudUploadOutlined />}
+									startIcon={<CloudUploadOutlined style={{ fontSize: '100%' }} />}
 									onClick={this.submit}
 								>
 									{t('submit')}
